@@ -37,6 +37,3 @@ python3 src/shell_emulator.py
 
 ### Примеры использования в виде скриншотов
 ![alt text](images/image-1.png)
-
-### Результаты прогона тестов
-![alt text](images/image-2.png)
