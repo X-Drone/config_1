@@ -1,11 +1,13 @@
 import unittest
-from unittest.mock import patch, mock_open
+from unittest.mock import patch, mock_open, MagicMock
 import os
 import zipfile
 from zipfile import ZipFile
 import configparser
 import datetime
-from shell_emulator import shell_emulator
+import tkinter as tk
+from tkinter import scrolledtext
+from shell_emulator import ShellEmulator, execute_command, on_enter
 
 class TestShellEmulator(unittest.TestCase):
 
@@ -17,8 +19,9 @@ class TestShellEmulator(unittest.TestCase):
             zipf.writestr('file1.txt', 'content1')
             zipf.writestr('dir1/file2.txt', 'content2')
 
-        # Создаем экземпляр shell_emulator
-        self.shell = shell_emulator()
+        # Создаем экземпляр ShellEmulator
+        self.output_widget = MagicMock()
+        self.shell = ShellEmulator(self.output_widget)
 
     def tearDown(self):
         # Удаляем временный ZIP-архив после тестирования
@@ -26,10 +29,9 @@ class TestShellEmulator(unittest.TestCase):
         os.remove(self.zip_name)
 
     def test_ls(self):
-        with patch('builtins.print') as mock_print:
-            self.shell.ls()
-            mock_print.assert_any_call('file1.txt')
-            mock_print.assert_any_call('dir1/')
+        self.shell.ls()
+        self.output_widget.insert.assert_any_call(tk.END, 'file1.txt\n')
+        self.output_widget.insert.assert_any_call(tk.END, 'dir1/\n')
 
     def test_cd(self):
         self.shell.cd('/dir1')
@@ -42,23 +44,20 @@ class TestShellEmulator(unittest.TestCase):
         self.assertEqual(str(self.shell.path_obj), 'test_system.tar/')
 
     def test_touch(self):
-        with patch('builtins.print') as mock_print:
-            self.shell.touch('newfile.txt')
-            mock_print.assert_called_with('/newfile.txt/ created or updated')
+        self.shell.touch('newfile.txt')
+        self.output_widget.insert.assert_called_with(tk.END, '/newfile.txt/ created or updated\n')
 
-            with ZipFile(self.zip_name, 'r') as zipf:
-                self.assertIn('newfile.txt', zipf.namelist())
+        with ZipFile(self.zip_name, 'r') as zipf:
+            self.assertIn('newfile.txt', zipf.namelist())
 
     def test_who(self):
-        with patch('builtins.print') as mock_print:
-            self.shell.who()
-            login_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
-            mock_print.assert_called_with(f"test_user  pts/0        {login_time} (localhost)")
+        self.shell.who()
+        login_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
+        self.output_widget.insert.assert_called_with(tk.END, f"test_user  pts/0        {login_time} (localhost)\n")
 
     def test_du(self):
-        with patch('builtins.print') as mock_print:
-            self.shell.du()
-            mock_print.assert_called_with('Total disk usage: 16 bytes')
+        self.shell.du()
+        self.output_widget.insert.assert_called_with(tk.END, 'Total disk usage: 16 bytes\n')
 
 if __name__ == '__main__':
     unittest.main()

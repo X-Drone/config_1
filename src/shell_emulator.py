@@ -3,21 +3,23 @@ import os
 import configparser
 import datetime
 from zipfile import ZipFile
+import tkinter as tk
+from tkinter import scrolledtext
 
-
-class shell_emulator:
-    def __init__(self):
+class ShellEmulator:
+    def __init__(self, output_widget):
         # Чтение конфигурации из .ini файла
         config = configparser.ConfigParser()
         config.read('config.ini')
 
-        # Прочитаем параметры из секции "system"
+        # Прочитаем параметры из секции "settings"
         self.user = config['settings']['user']
         system_zip = config['settings']['system_file']
         self.system = ZipFile(system_zip)
         self.system_name = system_zip
         self.path_obj = zipfile.Path(self.system)
         self.path = self.path_obj.name
+        self.output_widget = output_widget
 
     def sawed_off_path(self, path):
         path = self.create_path(path)
@@ -41,7 +43,7 @@ class shell_emulator:
     def ls(self):
         files = list(self.path_obj.iterdir())
         for file in files:
-            print(file.name + ('/' if file.is_dir() else ''))
+            self.output_widget.insert(tk.END, file.name + ('/' if file.is_dir() else '') + '\n')
 
     def cd(self, path):
         # Получаем текущую директорию
@@ -66,7 +68,7 @@ class shell_emulator:
                 temp = temp / part
                 # Проверяем, существует ли такой файл или каталог
                 if not temp.exists():
-                    print(f'No such file or directory: {str(temp)[len(self.system_name):]}')
+                    self.output_widget.insert(tk.END, f'No such file or directory: {str(temp)[len(self.system_name):]}\n')
                     return
 
         # После выполнения всех шагов, temp будет содержать нужный путь
@@ -98,13 +100,13 @@ class shell_emulator:
         os.rename(tmp_file, self.system_name)
         self.system = ZipFile(self.system_name)  # Перезагружаем архив
         self.cd(self.path)
-        print(f"{file_path} created or updated")
+        self.output_widget.insert(tk.END, f"{file_path} created or updated\n")
 
     # Команда who - выводит текущего пользователя и время входа
     def who(self):
         # Используем os для получения текущего пользователя
         login_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
-        print(f"{self.user}  pts/0        {login_time} (localhost)")
+        self.output_widget.insert(tk.END, f"{self.user}  pts/0        {login_time} (localhost)\n")
 
     # Команда du - выводит размер файлов в текущем каталоге
     def du(self):
@@ -121,38 +123,51 @@ class shell_emulator:
 
         # Запуск рекурсивной функции с текущего каталога
         get_size(self.path_obj)
-        print(f"Total disk usage: {total_size} bytes")
+        self.output_widget.insert(tk.END, f"Total disk usage: {total_size} bytes\n")
 
+def execute_command(shell, command):
+    com = command.split(" ")
+    if com[0] == "ls":
+        shell.ls()
+    elif com[0] == "cd" and len(com) == 2:
+        shell.cd(' '.join(com[1:]))
+    elif com[0] == "tree":
+        shell.system.printdir()
+    elif com[0] == "echo" and len(com) == 2:
+        shell.output_widget.insert(tk.END, com[1] + '\n')
+    elif com[0] == "touch" and len(com) == 2:
+        shell.touch(com[1])
+    elif com[0] == "who":
+        shell.who()
+    elif com[0] == "du":
+        shell.du()
+    elif com[0] == "exit":
+        shell.output_widget.insert(tk.END, 'Exiting...\n')
+        return False
+    else:
+        shell.output_widget.insert(tk.END, f"Unknown command: {com[0]}\n")
 
-if __name__ == '__main__':
-    shell = shell_emulator()
+    # Update the current path based on the shell's path object
+    shell.path = shell.create_path(str(shell.path_obj)[len(shell.system_name):])
+    return True
 
-    while True:
-        try:
-            com = input(f"{shell.user}@virtual_shell:{shell.create_path(shell.path)}$ ").split(" ")
+def on_enter(event, shell, entry, output):
+    command = entry.get()
+    entry.delete(0, tk.END)
+    output.insert(tk.END, f"{shell.user}@virtual_shell:{shell.create_path(shell.path)}$ {command}\n")
+    if not execute_command(shell, command):
+        root.quit()
 
-            if com[0] == "ls":
-                shell.ls()
-            elif com[0] == "cd" and len(com) == 2:
-                shell.cd(' '.join(com[1:]))
-            elif com[0] == "tree":
-                shell.system.printdir()
-            elif com[0] == "echo" and len(com) == 2:
-                print(com[1])
-            elif com[0] == "touch" and len(com) == 2:
-                shell.touch(com[1])
-            elif com[0] == "who":
-                shell.who()
-            elif com[0] == "du":
-                shell.du()
-            elif com[0] == "exit":
-                print('Exiting...')
-                break
-            else:
-                print(f"Unknown command: {com[0]}")
+root = tk.Tk()
+root.title("Virtual Shell")
 
-            # Update the current path based on the shell's path object
-            shell.path = shell.create_path(str(shell.path_obj)[len(shell.system_name):])
+output = scrolledtext.ScrolledText(root, wrap=tk.WORD, width=80, height=20)
+output.pack(padx=10, pady=10)
 
-        except KeyboardInterrupt:
-            break
+entry = tk.Entry(root, width=80)
+entry.pack(padx=10, pady=10)
+entry.bind("<Return>", lambda event: on_enter(event, shell, entry, output))
+
+shell = ShellEmulator(output)
+
+root.mainloop()
