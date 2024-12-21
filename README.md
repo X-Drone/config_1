@@ -32,6 +32,7 @@
 ```
 git clone https://github.com/X-Drone/config_1.git
 cd config_1
+pip install tkinter
 python3 src/shell_emulator.py
 ```
 
